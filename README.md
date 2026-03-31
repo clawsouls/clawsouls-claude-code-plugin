@@ -64,6 +64,70 @@ The plugin includes intelligent skills that Claude activates automatically:
 
 - **Persona Advisor** — Expert help designing effective agent personas (`/agents` → persona-advisor)
 
+## Usage Modes
+
+ClawSouls works with all three Claude Code remote control mechanisms:
+
+### 🚀 Dispatch — Automated Tasks with Persona
+
+Run persona-driven tasks in CI/CD, cron jobs, or batch processing:
+
+```bash
+# PR review with surgical-coder persona
+claude --print --plugin-dir clawsouls-claude-plugin \
+  "Review the changes in this PR for security issues"
+
+# GitHub Actions example
+- name: AI Code Review
+  run: |
+    claude --print --plugin-dir clawsouls-claude-plugin \
+      --allowedTools "Read,Grep,Glob" \
+      "Review all changed files and report issues"
+```
+
+### 💬 Channels — Persistent Multi-Turn Sessions
+
+Maintain persona across long-running, bidirectional sessions:
+
+```bash
+# Start a streaming session with persona
+claude --output-format stream-json --plugin-dir clawsouls-claude-plugin
+
+# The persona persists across all exchanges in the session
+# Swarm Memory loads previous context automatically
+# SoulScan monitors identity consistency throughout
+```
+
+Use cases: team Slack bots, iterative code review, long-horizon development tasks.
+
+### 👁️ Remote Control — Oversight & Intervention
+
+Monitor running agents and intervene when persona drift is detected:
+
+```bash
+# Attach to a running session
+claude --resume <session-id>
+
+# Soul Rollback activates automatically if drift is detected
+# SoulScan provides real-time safety monitoring
+# Human can redirect or correct the agent mid-execution
+```
+
+Use cases: enterprise deployments, compliance-required environments, debugging.
+
+### 🔄 One Persona, Everywhere
+
+The same SOUL.md works across all platforms:
+
+| Platform | How |
+|----------|-----|
+| **Claude Code** | This plugin — `/clawsouls:install` |
+| **OpenClaw** | Native SOUL.md support — always-on AI partner |
+| **Claude Code CI/CD** | Dispatch mode — automated tasks |
+| **Custom Apps** | Soul Spec MCP server — `npx soul-spec-mcp` |
+
+Write once, deploy everywhere. That's the power of an open standard.
+
 ## What is Soul Spec?
 
 [Soul Spec](https://soulspec.org) is an open standard for defining AI agent identity through simple files:
