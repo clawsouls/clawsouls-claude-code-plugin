@@ -2,7 +2,7 @@
   "mcpServers": {
     "clawsouls": {
       "command": "npx",
-      "args": ["-y", "clawsouls-mcp"]
+      "args": ["-y", "clawsouls-mcp@latest"]
     }
   }
 }
