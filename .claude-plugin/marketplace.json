@@ -1,0 +1,23 @@
+{
+  "name": "clawsouls",
+  "owner": {
+    "name": "ClawSouls",
+    "email": "hello@clawsouls.ai"
+  },
+  "metadata": {
+    "description": "AI agent persona management, safety verification, memory sync, and identity rollback for Claude Code.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "clawsouls",
+      "source": ".",
+      "description": "Agent persona, SoulScan safety verification, Swarm Memory, and Soul Rollback for Claude Code. Powered by Soul Spec.",
+      "version": "1.0.0",
+      "author": {
+        "name": "ClawSouls"
+      },
+      "tags": ["persona", "safety", "memory", "identity", "soul-spec"]
+    }
+  ]
+}
