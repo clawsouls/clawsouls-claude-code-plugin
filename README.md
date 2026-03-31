@@ -18,7 +18,7 @@ AI agent persona management, safety verification, memory sync, and identity roll
 
 ### Option 1: GitHub Marketplace (Recommended)
 ```bash
-/plugin marketplace add clawsouls/clawsouls-claude-plugin
+/plugin marketplace add clawsouls/clawsouls-claude-code-plugin
 /plugin install clawsouls
 ```
 
@@ -32,7 +32,7 @@ Or browse in `/plugin` → Discover → search "clawsouls"
 
 ### Option 3: Local Development
 ```bash
-git clone https://github.com/clawsouls/clawsouls-claude-plugin.git
+git clone https://github.com/clawsouls/clawsouls-claude-code-plugin.git
 claude --plugin-dir ./clawsouls-claude-plugin
 ```
 
