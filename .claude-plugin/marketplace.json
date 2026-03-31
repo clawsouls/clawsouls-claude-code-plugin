@@ -11,7 +11,10 @@
   "plugins": [
     {
       "name": "clawsouls",
-      "source": ".",
+      "source": {
+        "source": "github",
+        "repo": "clawsouls/clawsouls-claude-code-plugin"
+      },
       "description": "Agent persona, SoulScan safety verification, Swarm Memory, and Soul Rollback for Claude Code. Powered by Soul Spec.",
       "version": "1.0.0",
       "author": {
