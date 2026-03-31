@@ -1,9 +1,12 @@
 {
   "mcpServers": {
+    "soul-spec": {
+      "command": "npx",
+      "args": ["-y", "soul-spec-mcp"]
+    },
     "clawsouls": {
       "command": "npx",
-      "args": ["-y", "soul-spec-mcp"],
-      "env": {}
+      "args": ["-y", "clawsouls-mcp"]
     }
   }
 }
