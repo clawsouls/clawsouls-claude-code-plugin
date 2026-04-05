@@ -173,8 +173,8 @@ tmux attach -t brad
 
 | Component | Purpose |
 |-----------|---------|
-| **Skills** | `soul-load`, `soul-browse`, `soul-scan`, `soul-export`, `memory-manage` |
-| **Commands** | `/clawsouls:activate`, `/clawsouls:load-soul`, `/clawsouls:browse`, `/clawsouls:scan`, `/clawsouls:export`, `/clawsouls:memory` |
+| **Skills** | `soul-load`, `soul-browse`, `soul-scan`, `soul-export`, `memory-manage`, `migrate-openclaw` |
+| **Commands** | `/clawsouls:activate`, `/clawsouls:load-soul`, `/clawsouls:browse`, `/clawsouls:scan`, `/clawsouls:export`, `/clawsouls:memory`, `/clawsouls:migrate` |
 | **Agent** | `soul-agent` — Soul Spec-aware sub-agent for persona tasks |
 | **Hooks** | SessionStart (detect soul), PreCompact (save memory), PostCompact (reload soul), FileChanged (drift alert), SessionEnd (flush memory) |
 | **MCP** | [soul-spec-mcp](https://github.com/clawsouls/soul-spec-mcp) v0.3.0 — 12 tools |
@@ -289,6 +289,17 @@ Full specification: [soulspec.org](https://soulspec.org)
 ## Migrating from OpenClaw
 
 Already using OpenClaw or SoulClaw? Your Soul Spec files and memory transfer directly:
+
+**Option 1: Automated (recommended)**
+
+```bash
+# Launch Claude Code with the plugin, then:
+/clawsouls:migrate
+
+# Auto-detects ~/.openclaw/workspace/, previews plan, migrates on confirmation
+```
+
+**Option 2: Manual**
 
 ```bash
 # 1. Copy persona files
@@ -450,6 +461,8 @@ claude-code-plugin/
 │   │   └── SKILL.md        # Persona drift detection & recovery
 │   ├── swarm-memory/
 │   │   └── SKILL.md        # Git-based multi-agent memory sync
+│   ├── migrate-openclaw/
+│   │   └── SKILL.md        # OpenClaw → Claude Code migration
 │   └── memory-manage/
 │       └── SKILL.md        # Memory CRUD operations
 ├── commands/
@@ -459,6 +472,7 @@ claude-code-plugin/
 │   ├── scan.md             # /clawsouls:scan
 │   ├── rollback.md         # /clawsouls:rollback
 │   ├── export.md           # /clawsouls:export
+│   ├── migrate.md          # /clawsouls:migrate
 │   └── memory.md           # /clawsouls:memory
 ├── agents/
 │   ├── soul-agent.md       # Soul Spec-aware sub-agent
