@@ -8,16 +8,14 @@
  * what it already wrote down.
  *
  * Hybrid retrieval (semantic-primary, keyword-fallback):
- *   - PRIMARY  — bge-m3 semantic search over a precomputed embedding cache
- *                (built by memory-index.js). Bridges conceptual queries
- *                (e.g. "분기" → "형제/막내") that keyword search can't.
+ *   - PRIMARY  — bge-m3 semantic search over a precomputed embedding cache.
  *   - FALLBACK — BM25 keyword ranker (IDF + length norm + field/title boost +
- *                recency). Used when ollama is down or the cache is missing —
- *                pure-markdown, zero-dependency, always available.
+ *                recency). Used when ollama is down or the cache is missing.
+ * Superseding/decay: archived/superseded memories are hidden; stale ones decay
+ * and get a ⚠️ flag. See memory-index.js (cache builder).
  *
- * Input  (stdin JSON): { prompt, cwd, session_id, ... }   (UserPromptSubmit)
- * Output (stdout): plain-text context block (added to the turn on exit 0).
- *                  Empty output / exit 0 when nothing relevant — never blocks.
+ * Exposes scored rankers (semanticScored / keywordScored) for the eval harness;
+ * runs as the UserPromptSubmit hook when executed directly.
  */
 'use strict';
 const fs = require('fs');
@@ -25,7 +23,7 @@ const path = require('path');
 const os = require('os');
 const http = require('http');
 
-const TOP_INDEX = 5, TOP_FILES = 3, MAX_CHARS = 1800;
+const TOP_INDEX = 5, TOP_FILES = 3, MAX_CHARS = 1800, SEM_FLOOR = 0.45;
 const BM25_K = 1.2, BM25_B = 0.75, FIELD_BOOST = 3.0, TITLE_BOOST = 1.8;
 const OLLAMA = process.env.OLLAMA_HOST || 'http://127.0.0.1:11434';
 const MODEL = process.env.CLAWSOULS_EMBED_MODEL || 'bge-m3';
@@ -38,7 +36,6 @@ const STOP = new Set(
 
 function readStdin() { try { return fs.readFileSync(0, 'utf8'); } catch { return ''; } }
 function tokenize(s) { return (String(s).toLowerCase().match(/[a-z0-9가-힣]{2,}/g) || []).filter(t => !STOP.has(t)); }
-
 function memoryRoots(cwd) {
   const roots = new Set([cwd, path.join(cwd, 'memory')]);
   roots.add(path.join(os.homedir(), '.claude', 'projects', cwd.replace(/\//g, '-'), 'memory'));
@@ -55,7 +52,7 @@ function collectFiles(roots) {
 function shortPath(f, cwd) { return cwd && f.startsWith(cwd + path.sep) ? f.slice(cwd.length + 1) : f.replace(os.homedir(), '~'); }
 
 // ---------- superseding / decay ----------
-const STALE_DAYS = 75; // older than this → ⚠️ verify flag in output (not hidden)
+const STALE_DAYS = 75;
 const hidden = m => !!(m && (m.status === 'archived' || m.status === 'superseded' || m.supersededBy));
 const isStale = (mtimeMs, status) => status === 'stale' || (!!mtimeMs && (Date.now() - mtimeMs) / 86400000 > STALE_DAYS);
 
@@ -75,23 +72,28 @@ function cosine(a, b) {
   for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
   return dot / (Math.sqrt(na) * Math.sqrt(nb) + 1e-9);
 }
-async function semanticRank(prompt) {
+// Full sorted scored list: [{ s, it }] (hidden filtered). null if cache/ollama unavailable.
+async function semanticScored(prompt) {
   let cache;
   try { cache = JSON.parse(fs.readFileSync(CACHE, 'utf8')); } catch { return null; }
   if (!cache || cache.model !== MODEL || !cache.items) return null;
   let q;
-  try { q = await embed(prompt); } catch { return null; } // ollama down -> fallback
+  try { q = await embed(prompt); } catch { return null; }
   const scored = [];
   for (const it of Object.values(cache.items)) {
-    if (!it.emb || !it.emb.length) continue;
-    if (hidden(it)) continue; // superseded/archived → never surface
+    if (!it.emb || !it.emb.length || hidden(it)) continue;
     scored.push({ s: cosine(q, it.emb), it });
   }
   if (!scored.length) return null;
   scored.sort((a, b) => b.s - a.s);
+  return scored;
+}
+async function semanticRank(prompt) {
+  const scored = await semanticScored(prompt);
+  if (!scored) return null;
   const idx = [], files = [];
   for (const { s, it } of scored) {
-    if (s < 0.45) break; // relevance floor for bge-m3 cosine
+    if (s < SEM_FLOOR) break;
     if (it.kind === 'index' && idx.length < TOP_INDEX) idx.push(it.line);
     else if (it.kind === 'file' && files.length < TOP_FILES) { it.stale = isStale(it.mtime, it.status); files.push(it); }
     if (idx.length >= TOP_INDEX && files.length >= TOP_FILES) break;
@@ -101,7 +103,8 @@ async function semanticRank(prompt) {
 }
 
 // ---------- KEYWORD (fallback) ----------
-function keywordRank(prompt, cwd) {
+// Full sorted lists: { idxLines:[{s,line}], fileHits:[{s,name,desc,rel,stale}] }. null if none.
+function keywordScored(prompt, cwd) {
   const qset = new Set(tokenize(prompt));
   if (qset.size < 2) return null;
   const files = collectFiles(memoryRoots(cwd));
@@ -113,7 +116,7 @@ function keywordRank(prompt, cwd) {
     try { content = fs.readFileSync(f, 'utf8'); mtime = fs.statSync(f).mtimeMs; } catch { continue; }
     const base = path.basename(f);
     const status = ((content.match(/^status:\s*(\w+)/m) || [])[1] || '').toLowerCase();
-    if (base !== 'MEMORY.md' && (status === 'archived' || status === 'superseded' || /^superseded_by:/m.test(content))) continue; // hidden
+    if (base !== 'MEMORY.md' && (status === 'archived' || status === 'superseded' || /^superseded_by:/m.test(content))) continue;
     const toks = tokenize(content);
     docs.push({ f, base, content, toks, len: toks.length || 1, mtime, status, isIndex: base === 'MEMORY.md' });
     for (const t of new Set(toks)) df[t] = (df[t] || 0) + 1;
@@ -154,13 +157,19 @@ function keywordRank(prompt, cwd) {
       if (fieldToks.has(t)) s += idf(t) * FIELD_BOOST;
     }
     if (s <= 0) continue;
-    fileHits.push({ s: s * recency(d.mtime) * (d.status === 'stale' ? 0.6 : 1), name, desc, rel: shortPath(d.f, cwd), stale: isStale(d.mtime, d.status) });
+    fileHits.push({ s: s * recency(d.mtime) * (d.status === 'stale' ? 0.6 : 1), name, desc, rel: shortPath(d.f, cwd), base: d.base, stale: isStale(d.mtime, d.status) });
   }
   fileHits.sort((a, b) => b.s - a.s);
-  const idx = idxLines.slice(0, TOP_INDEX).map(x => x.line);
-  const files2 = fileHits.slice(0, TOP_FILES);
-  if (!idx.length && !files2.length) return null;
-  return { mode: 'keyword', idx, files: files2 };
+  if (!idxLines.length && !fileHits.length) return null;
+  return { idxLines, fileHits };
+}
+function keywordRank(prompt, cwd) {
+  const r = keywordScored(prompt, cwd);
+  if (!r) return null;
+  const idx = r.idxLines.slice(0, TOP_INDEX).map(x => x.line);
+  const files = r.fileHits.slice(0, TOP_FILES);
+  if (!idx.length && !files.length) return null;
+  return { mode: 'keyword', idx, files };
 }
 
 function render(r) {
@@ -180,14 +189,14 @@ async function main() {
   const prompt = input.prompt || '';
   const cwd = input.cwd || process.cwd();
   if (tokenize(prompt).length < 2) process.exit(0);
-
   let r = null;
-  try { r = await semanticRank(prompt); } catch {}      // PRIMARY
-  if (!r) r = keywordRank(prompt, cwd);                  // FALLBACK
+  try { r = await semanticRank(prompt); } catch {}
+  if (!r) r = keywordRank(prompt, cwd);
   if (!r) process.exit(0);
-
   process.stdout.write(render(r));
   process.exit(0);
 }
 
-main().catch(() => process.exit(0)); // never break the turn
+module.exports = { tokenize, memoryRoots, collectFiles, shortPath, embed, cosine, semanticScored, semanticRank, keywordScored, keywordRank, CACHE, MODEL };
+
+if (require.main === module) main().catch(() => process.exit(0)); // hook entry; never break the turn
