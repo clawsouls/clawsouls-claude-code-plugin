@@ -54,6 +54,11 @@ function collectFiles(roots) {
 }
 function shortPath(f, cwd) { return cwd && f.startsWith(cwd + path.sep) ? f.slice(cwd.length + 1) : f.replace(os.homedir(), '~'); }
 
+// ---------- superseding / decay ----------
+const STALE_DAYS = 75; // older than this → ⚠️ verify flag in output (not hidden)
+const hidden = m => !!(m && (m.status === 'archived' || m.status === 'superseded' || m.supersededBy));
+const isStale = (mtimeMs, status) => status === 'stale' || (!!mtimeMs && (Date.now() - mtimeMs) / 86400000 > STALE_DAYS);
+
 // ---------- SEMANTIC (primary) ----------
 function embed(text) {
   return new Promise((resolve, reject) => {
@@ -79,6 +84,7 @@ async function semanticRank(prompt) {
   const scored = [];
   for (const it of Object.values(cache.items)) {
     if (!it.emb || !it.emb.length) continue;
+    if (hidden(it)) continue; // superseded/archived → never surface
     scored.push({ s: cosine(q, it.emb), it });
   }
   if (!scored.length) return null;
@@ -87,7 +93,7 @@ async function semanticRank(prompt) {
   for (const { s, it } of scored) {
     if (s < 0.45) break; // relevance floor for bge-m3 cosine
     if (it.kind === 'index' && idx.length < TOP_INDEX) idx.push(it.line);
-    else if (it.kind === 'file' && files.length < TOP_FILES) files.push(it);
+    else if (it.kind === 'file' && files.length < TOP_FILES) { it.stale = isStale(it.mtime, it.status); files.push(it); }
     if (idx.length >= TOP_INDEX && files.length >= TOP_FILES) break;
   }
   if (!idx.length && !files.length) return null;
@@ -105,8 +111,11 @@ function keywordRank(prompt, cwd) {
   for (const f of files) {
     let content = '', mtime = 0;
     try { content = fs.readFileSync(f, 'utf8'); mtime = fs.statSync(f).mtimeMs; } catch { continue; }
-    const toks = tokenize(content), base = path.basename(f);
-    docs.push({ f, base, content, toks, len: toks.length || 1, mtime, isIndex: base === 'MEMORY.md' });
+    const base = path.basename(f);
+    const status = ((content.match(/^status:\s*(\w+)/m) || [])[1] || '').toLowerCase();
+    if (base !== 'MEMORY.md' && (status === 'archived' || status === 'superseded' || /^superseded_by:/m.test(content))) continue; // hidden
+    const toks = tokenize(content);
+    docs.push({ f, base, content, toks, len: toks.length || 1, mtime, status, isIndex: base === 'MEMORY.md' });
     for (const t of new Set(toks)) df[t] = (df[t] || 0) + 1;
   }
   if (!docs.length) return null;
@@ -145,7 +154,7 @@ function keywordRank(prompt, cwd) {
       if (fieldToks.has(t)) s += idf(t) * FIELD_BOOST;
     }
     if (s <= 0) continue;
-    fileHits.push({ s: s * recency(d.mtime), name, desc, rel: shortPath(d.f, cwd) });
+    fileHits.push({ s: s * recency(d.mtime) * (d.status === 'stale' ? 0.6 : 1), name, desc, rel: shortPath(d.f, cwd), stale: isStale(d.mtime, d.status) });
   }
   fileHits.sort((a, b) => b.s - a.s);
   const idx = idxLines.slice(0, TOP_INDEX).map(x => x.line);
@@ -159,7 +168,7 @@ function render(r) {
   for (const line of r.idx) out += line + '\n';
   if (r.files.length) {
     out += '\nRelated memory files:\n';
-    for (const it of r.files) out += `- ${it.name} (${it.rel})` + (it.desc ? ` — ${it.desc}` : '') + '\n';
+    for (const it of r.files) out += `- ${it.stale ? '⚠️stale ' : ''}${it.name} (${it.rel})` + (it.desc ? ` — ${it.desc}` : '') + '\n';
   }
   if (out.length > MAX_CHARS) out = out.slice(0, MAX_CHARS) + '\n…(truncated)';
   return out;

@@ -93,8 +93,10 @@ async function main() {
       if (cur && cur.mtime === mtime) continue;
       const name = (content.match(/^name:\s*(.+?)\s*$/m) || [])[1] || base.replace(/\.md$/, '');
       const desc = (content.match(/^description:\s*"?(.+?)"?\s*$/m) || [])[1] || '';
+      const status = ((content.match(/^status:\s*(\w+)/m) || [])[1] || '').toLowerCase();
+      const supersededBy = (content.match(/^superseded_by:\s*(.+?)\s*$/m) || [])[1] || '';
       const body = strip(content.replace(/^---[\s\S]*?---/, '')).slice(0, EXCERPT);
-      work.push({ key, text: `${name}. ${desc}. ${body}`, meta: { kind: 'file', mtime, name, desc, rel } });
+      work.push({ key, text: `${name}. ${desc}. ${body}`, meta: { kind: 'file', mtime, name, desc, rel, status, supersededBy } });
     }
   }
 
