@@ -8,7 +8,7 @@ Manage AI agent personas with [Soul Spec](https://soulspec.org) in Claude Code. 
 
 - 🎭 **Load Personas** — Install Soul Spec personas from the registry or local files
 - 🔍 **Browse Registry** — Search 100+ AI agent personas by category, keyword, or tag
-- 🧠 **Persistent Memory** — MEMORY.md + topic files + daily logs survive across sessions
+- 🧠 **Active Memory (Soul Recall)** — relevant memory is auto-retrieved into context on every prompt; hybrid semantic (bge-m3) + keyword ranking, with superseding/decay so stale facts fade — see [Soul Recall](#soul-recall-active-memory)
 - 🛡️ **Safety Verification** — SoulScan grades personas A+ to F with 53 safety patterns
 - 📁 **Soul Spec v0.5** — Full support for SOUL.md, IDENTITY.md, AGENTS.md, and more
 - 💬 **Telegram/Discord** — Works with Claude Code Channels for mobile access
@@ -176,7 +176,7 @@ tmux attach -t brad
 | **Skills** | `soul-load`, `soul-browse`, `soul-scan`, `soul-export`, `memory-manage`, `migrate-openclaw` |
 | **Commands** | `/clawsouls:activate`, `/clawsouls:load-soul`, `/clawsouls:browse`, `/clawsouls:scan`, `/clawsouls:export`, `/clawsouls:memory`, `/clawsouls:migrate` |
 | **Agent** | `soul-agent` — Soul Spec-aware sub-agent for persona tasks |
-| **Hooks** | SessionStart (detect soul), PreCompact (save memory), PostCompact (reload soul), FileChanged (drift alert), SessionEnd (flush memory) |
+| **Hooks** | SessionStart → builds/refreshes the Soul Recall embedding cache (`memory-index.js`); UserPromptSubmit → auto-retrieves relevant memory into context (`memory-retrieve.js`) |
 | **MCP** | [soul-spec-mcp](https://github.com/clawsouls/soul-spec-mcp) v0.3.0 — 12 tools |
 
 ### MCP Tools (soul-spec-mcp v0.5.0)
@@ -194,6 +194,25 @@ tmux attach -t brad
 | `memory_search` | Hybrid TF-IDF + semantic search (auto-detects Ollama bge-m3) |
 | `memory_get` | Fetch specific memory file content |
 
+### Soul Recall (Active Memory)
+
+**Soul Memory** is the storage substrate: plain markdown (`MEMORY.md` index + `memory/*.md` daily logs and topic files), git-versioned, no database. **Soul Recall** is the active retrieval layer on top of it.
+
+Previously, recalling a fact meant the agent had to *decide* to run `/clawsouls:memory search` — so any turn where it didn't think to search looked like amnesia. Soul Recall makes memory active instead of passive: a `UserPromptSubmit` hook runs on every prompt, finds the most relevant memory, and injects it into context automatically — no manual search.
+
+Retrieval is **hybrid**:
+
+- **Semantic (primary)** — bge-m3 embeddings via a local [Ollama](https://ollama.com), cosine-ranked against a precomputed cache. Results are tagged `[semantic]`.
+- **Keyword (fallback)** — a dependency-free BM25 ranker (IDF + length normalization + field/title boost + recency) used whenever Ollama or the cache is unavailable. Results are tagged `[keyword]`.
+
+A `SessionStart` hook (`memory-index.js`) builds and refreshes the embedding cache incrementally (keyed by file mtime) at `~/.cache/clawsouls`, so per-prompt retrieval only has to embed the query — keeping latency tiny.
+
+**Superseding / decay.** Memory frontmatter carries `status: active | stale | archived | superseded` plus `superseded_by:`. Archived and superseded memories are hidden from retrieval; stale ones are down-weighted and flagged with ⚠️ so the agent treats them with caution.
+
+> **Ollama / bge-m3 is optional.** With it, retrieval is semantic-primary. Without it, Soul Recall degrades gracefully to the keyword ranker — the hook never blocks a turn. To enable semantic mode: `ollama pull bge-m3` (auto-detected at `localhost:11434`).
+
+The semantic-primary + keyword-fallback configuration was chosen by measurement, not assumption — see [`docs/AUTO_MEMORY_HOOK.md`](docs/AUTO_MEMORY_HOOK.md) for the ablation.
+
 ### Memory System — How It Works
 
 Claude Code has direct filesystem access. The agent reads and writes memory files like any other file — no special API needed.
@@ -204,9 +223,10 @@ Claude Code has direct filesystem access. The agent reads and writes memory file
 Session Start                    During Session                    Session End
      │                                │                                │
      ▼                                ▼                                ▼
-Read MEMORY.md              Write new knowledge to              SessionEnd hook
-+ memory/*.md               memory/YYYY-MM-DD.md                flushes unsaved
-(SessionStart hook)         or memory/topic-*.md                context to files
+SessionStart hook builds    UserPromptSubmit hook auto-         Agent saves unsaved
+the embedding cache;        injects relevant memory each        context to memory
+agent reads MEMORY.md       turn (Soul Recall); agent writes    files per CLAUDE.md
++ memory/*.md               to memory/YYYY-MM-DD.md / topic-*   rules before exit
 ```
 
 #### File Layout
@@ -250,7 +270,7 @@ Add these rules to `CLAUDE.md` so the agent maintains memory autonomously. **Wit
 | Aspect | OpenClaw/SoulClaw | Claude Code + Plugin |
 |--------|-------------------|---------------------|
 | **Memory creation** | Framework auto-extracts (passive memory) | Agent writes files per CLAUDE.md rules |
-| **Compaction** | Automatic on context overflow | PreCompact hook + agent judgment |
+| **Compaction** | Automatic on context overflow | Agent judgment per CLAUDE.md rules |
 | **Search** | bge-m3 semantic + hybrid | TF-IDF/BM25 (hybrid with Ollama) |
 | **Sync** | Single machine | Git-based multi-device (`memory_sync`) |
 | **File format** | Markdown files | Same markdown files (100% compatible) |
@@ -258,15 +278,12 @@ Add these rules to `CLAUDE.md` so the agent maintains memory autonomously. **Wit
 
 #### Plugin Hooks
 
-Memory is also managed via lifecycle hooks:
+The plugin registers two hooks (see `hooks/hooks.json`), both powering Soul Recall:
 
 | Hook | When | Action |
 |------|------|--------|
-| SessionStart | Session opens | Reads SOUL.md, injects memory context |
-| PreCompact | Before compaction | Saves unsaved context to memory files |
-| PostCompact | After compaction | Reloads SOUL.md + memory |
-| FileChanged | SOUL.md modified | Alerts persona drift |
-| SessionEnd | Session closes | Flushes remaining context |
+| SessionStart | Session opens | Builds/refreshes the embedding cache (`memory-index.js`) — incremental, mtime-keyed |
+| UserPromptSubmit | Every user prompt | Auto-retrieves the most relevant memory and injects it into context (`memory-retrieve.js`) |
 
 ### Soul Spec Files
 
@@ -478,9 +495,13 @@ claude-code-plugin/
 │   ├── soul-agent.md       # Soul Spec-aware sub-agent
 │   └── persona-advisor.md  # Expert persona design advisor
 ├── hooks/
-│   └── hooks.json          # Lifecycle hooks (5 events)
+│   ├── hooks.json          # Hook registration (SessionStart, UserPromptSubmit)
+│   ├── memory-index.js     # Soul Recall: build/refresh bge-m3 embedding cache
+│   └── memory-retrieve.js  # Soul Recall: auto-retrieve memory on each prompt
 ├── test/
-│   └── MIGRATION_TEST.md   # Migration test checklist
+│   ├── memory-eval.js          # Soul Recall retrieval ablation harness
+│   ├── memory-eval-set.json    # Eval query set (N=32)
+│   └── MIGRATION_TEST.md       # Migration test checklist
 └── README.md
 ```
 

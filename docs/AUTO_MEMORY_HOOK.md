@@ -1,8 +1,10 @@
-# Active Memory — Auto-Retrieval Hook
+# Soul Recall — Active Memory Auto-Retrieval
 
 > Turning a markdown memory system from **passive** (you have to remember to search)
 > into **active** (relevant memory is injected automatically, every turn).
-> Phase 1 of the ClawSouls memory R&D track.
+> "Soul Recall" is the active retrieval layer over **Soul Memory** — the plain
+> markdown store (`MEMORY.md` index + `memory/*.md` daily logs and topic files,
+> git-versioned, no database).
 
 ## The problem: storage was never the bottleneck — retrieval was
 
@@ -33,33 +35,85 @@ already holding the memory that matters — no manual search, no forgetting.
 user prompt ─▶ UserPromptSubmit hook ─▶ rank memory ─▶ inject top-K pointers ─▶ model
 ```
 
-It ships in this plugin at `hooks/hooks.json` + `hooks/memory-retrieve.js`. No
-manifest wiring needed — Claude Code auto-discovers the `hooks/` directory.
+It ships in this plugin via `hooks/hooks.json`, which registers two hooks:
+
+- **`UserPromptSubmit` → `hooks/memory-retrieve.js`** — the retriever above.
+- **`SessionStart` → `hooks/memory-index.js`** — builds/refreshes the semantic
+  embedding cache so per-prompt retrieval is cheap (see below).
+
+No manifest wiring needed — Claude Code auto-discovers the `hooks/` directory.
 
 ## Design principles
 
 - **Markdown-native.** The store stays plain `.md` files in git. No database, no
   hosted service. The memory is human-readable, diff-able, and portable — the same
   property that makes Soul Spec personas portable.
-- **Engine-agnostic ranker.** Phase 1 uses dependency-free keyword/TF ranking. The
-  ranker is one function; it can be swapped for hybrid (BM25 + vector + graph) search
-  later without changing the hook contract.
+- **Hybrid ranker, graceful fallback.** Retrieval is semantic-primary: bge-m3
+  embeddings (via local Ollama) cosine-ranked against a precomputed cache. When
+  Ollama or the cache is unavailable, it falls back to a dependency-free BM25
+  keyword ranker (IDF + length norm + field/title boost + recency). Each injection
+  is tagged `[semantic]` or `[keyword]` so the source of recall is transparent.
 - **Progressive disclosure.** The hook injects *pointers* (one-line index entries +
   file descriptions), not full file bodies. The agent reads the full file only when
   it needs the detail. Cheap on tokens, high on signal.
 - **Never block.** Any error → exit 0 with no output. A memory hook must never break
   the user's turn.
 
-## Roadmap
+## The semantic cache (`memory-index.js`)
 
-- **Phase 1 (this):** auto-retrieval + injection on `UserPromptSubmit`. Kills the
-  "forgot to search" failure mode.
-- **Phase 2:** `superseding` (a newer fact supersedes an older one) + `decay`
-  (stale facts expire) so the index self-cleans; deeper progressive disclosure;
-  active-authoring discipline (propagation, backlinks, contradiction flags).
-- **Phase 3 (only if needed):** swap the ranker for a hybrid/vector backend when
-  recall at scale demands it — markdown stays the source of truth, the backend is
-  just an index.
+Embedding the whole memory store on every prompt would be slow. Instead, a
+`SessionStart` hook embeds each memory item — `MEMORY.md` index lines and each
+`memory/*.md` file — with bge-m3 and caches the vectors at
+`~/.cache/clawsouls/memory-embeddings.json`, keyed by path + file mtime.
+
+The cache is **incremental**: unchanged items (same mtime) are reused, only
+new/changed items are re-embedded, and entries whose source file vanished are
+pruned. At prompt time the retriever embeds only the *query* (a single call) and
+cosines it against the cache — so per-prompt latency stays tiny (~0.15s).
+
+If Ollama is unreachable, `memory-index.js` is a no-op (any existing cache is left
+untouched) and the retriever falls back to keyword ranking. The cache is never a
+hard dependency.
+
+## Superseding & decay
+
+Memory files can carry frontmatter that controls their visibility in retrieval:
+
+| Field | Effect |
+|-------|--------|
+| `status: archived` / `status: superseded` | **Hidden** — never retrieved. |
+| `superseded_by: <file>` | **Hidden** — a newer memory replaces this one. |
+| `status: stale` (or untouched for ~75 days) | **Down-weighted** and flagged with ⚠️ in the injected pointer, so the agent treats it as possibly outdated. |
+
+This keeps the active surface self-cleaning: old facts fade, replaced facts
+disappear, and the agent is warned when it's leaning on something that may have
+gone stale — without anyone having to delete history from the markdown store.
+
+## Measuring it: the ablation (`test/memory-eval.js`)
+
+We didn't *assume* semantic beats keyword — we measured it. The harness at
+`test/memory-eval.js` runs the **same rankers the live hook uses** over a 32-query
+eval set (`test/memory-eval-set.json`), reporting recall@1/3/5 and MRR for each
+config (keyword, semantic, and RRF rank-fusion of the two):
+
+| config | R@1 | R@5 | MRR |
+|--------|-----|-----|-----|
+| keyword | 69% | 94% | 0.80 |
+| **semantic** | **91%** | **100%** | **0.94** |
+| RRF (fusion) | 84% | 100% | 0.91 |
+
+**Conclusion:** semantic wins outright, and **RRF was rejected** — fusing keyword
+back in *diluted* the strong semantic ranking (R@1 91% → 84%). So the shipped
+config is **semantic-primary with keyword as a pure fallback**, not a blend.
+
+Reproduce with:
+
+```bash
+node test/memory-eval.js --cwd /path/to/a/memory/project
+```
+
+(Run against a project that has a populated `MEMORY.md` + `memory/`; with Ollama up
+you get the semantic/RRF rows, without it the keyword row.)
 
 ## Why this isn't "just another memory engine"
 
@@ -73,11 +127,11 @@ ClawSouls differentiates on the layers above the engine:
 The auto-retrieval hook is the engine getting out of the agent's way; the durable
 moat is identity + governance + collective on top of it.
 
-## Measuring it
+## Beyond the internal set
 
-Retrieval quality is measurable. We evaluate the approach on public long-term-memory
-benchmarks (LongMemEval, LoCoMo) — both as product validation and as material for the
-persona-memory research we publish.
+The ablation above uses an internal query set. Next, we evaluate the same approach
+on public long-term-memory benchmarks (LongMemEval, LoCoMo) — both as product
+validation and as material for the persona-memory research we publish.
 
 ## Usage
 
