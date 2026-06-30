@@ -122,7 +122,7 @@ ClawSouls differentiates on the layers above the engine:
 
 - **Identity** — memory is bound to a portable Soul Spec persona, not a vendor silo.
 - **Governance** — SoulScan verifies the persona/memory package before it's trusted.
-- **Collective** — Swarm Memory lets multiple agents share and merge memory via git.
+- **Collective** — Swarm Memory lets multiple agents share and merge memory via git. See [Multi-Machine & Swarm Memory Setup](./MEMORY_SYNC_SETUP.md) for keeping one git SSOT and syncing it across machines/agents.
 
 The auto-retrieval hook is the engine getting out of the agent's way; the durable
 moat is identity + governance + collective on top of it.
