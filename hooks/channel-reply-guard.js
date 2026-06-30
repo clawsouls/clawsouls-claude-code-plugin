@@ -46,11 +46,18 @@ function main() {
       .filter(Boolean);
   } catch { process.exit(0); }
 
-  // Find the last real user message.
+  // Find the last real user PROMPT. Claude Code stores tool_result messages
+  // with role=user too, so a turn that ends in a tool call would otherwise pin
+  // lastUser to a tool_result (which carries no <channel> marker) and slip
+  // through. Skip tool_result-only messages to find the actual prompt.
   let lastUser = -1;
   for (let i = 0; i < lines.length; i++) {
     const msg = lines[i].message;
-    if (msg && msg.role === 'user') lastUser = i;
+    if (!msg || msg.role !== 'user') continue;
+    const c = msg.content;
+    const isToolResult = Array.isArray(c) && c.length > 0 && c.every(x => x && x.type === 'tool_result');
+    if (isToolResult) continue;
+    lastUser = i;
   }
   if (lastUser < 0) process.exit(0);
 
