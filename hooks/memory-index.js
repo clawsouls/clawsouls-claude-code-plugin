@@ -32,7 +32,12 @@ function argCwd() {
 
 function memoryRoots(cwd) {
   const roots = new Set([cwd, path.join(cwd, 'memory')]);
-  roots.add(path.join(os.homedir(), '.claude', 'projects', cwd.replace(/\//g, '-'), 'memory'));
+  const projects = path.join(os.homedir(), '.claude', 'projects');
+  // POSIX slash encoding — unchanged for macOS/Linux.
+  roots.add(path.join(projects, cwd.replace(/\//g, '-'), 'memory'));
+  // Windows: Claude Code encodes ALL non-alphanumerics (drive ':', '\\', '_') to '-'.
+  // Added as an EXTRA root only — POSIX behavior is untouched (Set dedups when identical).
+  roots.add(path.join(projects, cwd.replace(/[^a-zA-Z0-9]/g, '-'), 'memory'));
   return [...roots];
 }
 function collectFiles(roots) {
