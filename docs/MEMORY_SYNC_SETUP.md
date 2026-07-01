@@ -70,6 +70,19 @@ To share memory between agents/machines (e.g. a Mac and a Windows box):
 2. On each machine, symlink/junction the native location into a local clone of that repo's `memory/`.
 3. `git pull` / `git push` to sync. Daily-log files are effectively append-only (few conflicts); index/topic files may occasionally need a manual merge.
 
+### Hybrid: shared knowledge + per-agent daily logs
+
+When several agents share one memory repo but do **different** work, a single flat pool lets each agent's day-to-day logs pollute the others' recall. Split it:
+
+- **Shared** (repo `memory/` root): `MEMORY.md`, `topic-*.md`, `feedback-*.md`, `reference-*.md`, `project_*.md`, `topic-map.json` — strategic knowledge every agent reads/writes. Merges via git.
+- **Per-agent** (`memory/daily-<agent>/`): each agent's daily logs (`YYYY-MM-DD.md`, plus `archive/`). Separate subfolders never collide.
+
+All agents still symlink/junction the native location to the **same** `memory/` folder — **one** link. The link is created locally per machine and is **never committed to git**, so there is no cross-platform issue (macOS/Linux `ln -s`, Windows `mklink /J`). Route daily logs to the per-agent subfolder by setting it in that project's `CLAUDE.md`, e.g.:
+
+> Daily log → `memory/daily-<agent>/YYYY-MM-DD.md`
+
+Note on indexing: `memoryRoots()` currently reads only the **top level** of each root, so shared files (at `memory/` root) are in semantic recall, while daily logs (in a subfolder) are read by path at session start but not semantically indexed. To also put per-agent daily logs in semantic recall, index the shared root **plus only the current agent's** `daily-<agent>/` folder (a recursive-with-scope walk) — keeping isolation.
+
 Soul Recall reads the union and **skips superseded entries**, so archive stale files with frontmatter instead of deleting them:
 
 ```markdown
