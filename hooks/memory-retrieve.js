@@ -44,7 +44,16 @@ function memoryRoots(cwd) {
   // Windows: Claude Code encodes ALL non-alphanumerics (drive ':', '\\', '_') to '-'.
   // Added as an EXTRA root only — POSIX behavior is untouched (Set dedups when identical).
   roots.add(path.join(projects, cwd.replace(/[^a-zA-Z0-9]/g, '-'), 'memory'));
-  return [...roots];
+  // Dedup by REAL path: when native + cwd/memory are symlinks/junctions to the same
+  // store, the string Set can't tell they're one dir, so every file gets read (and
+  // injected) twice. Resolve each root; a non-existent root throws → keep raw string.
+  const seen = new Set(), out = [];
+  for (const r of roots) {
+    let key = r;
+    try { key = fs.realpathSync(r); } catch {}
+    if (!seen.has(key)) { seen.add(key); out.push(r); }
+  }
+  return out;
 }
 function collectFiles(roots) {
   const files = new Set();
