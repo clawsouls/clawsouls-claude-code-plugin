@@ -39,7 +39,8 @@ function findDailyLog(cwd, stamp) {
     const f = path.join(r, `${stamp}.md`);
     try { const st = fs.statSync(f); if (st.isFile()) return { f, mtimeMs: st.mtimeMs }; } catch {}
   }
-  // Not found — return the preferred write location (first root's memory dir).
+  // Not found — return the preferred write location (first memory root; roots
+  // from memoryRoots() are already memory dirs).
   return { f: path.join(roots[0] || path.join(cwd, 'memory'), `${stamp}.md`), mtimeMs: null };
 }
 
