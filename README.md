@@ -283,7 +283,7 @@ The plugin registers these hooks (see `hooks/hooks.json`), powering Soul Recall:
 | Hook | When | Action |
 |------|------|--------|
 | SessionStart | Session opens | Builds/refreshes the embedding cache (`memory-index.js`) — incremental, mtime-keyed |
-| UserPromptSubmit | Every user prompt | Auto-retrieves the most relevant memory and injects it into context (`memory-retrieve.js`) |
+| UserPromptSubmit | Every user prompt | Auto-retrieves the most relevant memory and injects it into context; also nudges a memory flush when today's daily log is missing/stale — conditional + cooldown-limited, so near-zero token cost (`memory-retrieve.js`) |
 | Stop | Turn ends | Guards channel-reply etiquette so replies reach the sender (`channel-reply-guard.js`) |
 | PreCompact | Before compaction | Reminds the agent to flush unsaved session knowledge to today's daily log before the transcript is summarized (`precompact-memory-flush.js`) |
 

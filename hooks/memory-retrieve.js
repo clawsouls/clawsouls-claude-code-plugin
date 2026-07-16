@@ -22,6 +22,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const http = require('http');
+const crypto = require('crypto');
 
 const TOP_INDEX = 5, TOP_FILES = 3, MAX_CHARS = 1800, SEM_FLOOR = 0.45;
 const BM25_K = 1.2, BM25_B = 0.75, FIELD_BOOST = 3.0, TITLE_BOOST = 1.8;
@@ -186,6 +187,66 @@ function keywordRank(prompt, cwd) {
   return { mode: 'keyword', idx, files };
 }
 
+// ---------- conditional flush nudge ----------
+// Compaction silently drops whatever was never written to a memory file. The
+// PreCompact hook is the LAST-RESORT reminder (fires as compaction starts); this
+// is the EARLY one — but strictly conditional, so it stays ~free in tokens:
+//   - fires only when today's daily log is missing or stale (>= STALE_NUDGE_MIN)
+//   - and at most once per NUDGE_COOLDOWN_MIN per project (stamp file in cache dir)
+//   - and only in projects that actually use the daily-log convention
+// One line, ~40 tokens, a few times in a long session. A naive every-turn nudge
+// would be counterproductive: the reminders accumulate in context and hasten the
+// very compaction they try to protect against.
+const STALE_NUDGE_MIN = 60;    // daily log older than this (min) → nudge
+const NUDGE_COOLDOWN_MIN = 45; // min gap between nudges per project
+
+function todayStamp() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+function flushNudge(cwd, nowMs) {
+  try {
+    const now = nowMs || Date.now();
+    const stamp = todayStamp();
+    let newest = null;      // today's log mtime across roots (null = not created)
+    let usesDaily = false;  // project has ANY YYYY-MM-DD.md → daily-log convention in use
+    for (const r of memoryRoots(cwd)) {
+      let entries;
+      try { entries = fs.readdirSync(r); } catch { continue; }
+      for (const f of entries) {
+        if (!/^\d{4}-\d{2}-\d{2}\.md$/.test(f)) continue;
+        usesDaily = true;
+        if (f === `${stamp}.md`) {
+          try {
+            const m = fs.statSync(path.join(r, f)).mtimeMs;
+            if (newest === null || m > newest) newest = m;
+          } catch {}
+        }
+      }
+    }
+    if (!usesDaily) return '';                    // convention not in use — stay silent
+    const ageMin = newest === null ? Infinity : (now - newest) / 60000;
+    if (ageMin < STALE_NUDGE_MIN) return '';      // fresh enough — stay silent
+
+    // Per-project cooldown: a stale log must NOT nudge on every prompt.
+    const dir = path.dirname(CACHE);
+    const key = crypto.createHash('md5').update(String(cwd)).digest('hex').slice(0, 12);
+    const stampFile = path.join(dir, `flush-nudge-${key}.stamp`);
+    try {
+      const last = fs.statSync(stampFile).mtimeMs;
+      if ((now - last) / 60000 < NUDGE_COOLDOWN_MIN) return '';
+    } catch {}
+    try { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(stampFile, ''); } catch { return ''; }
+
+    const state = newest === null
+      ? `today's daily log (memory/${stamp}.md) has not been created yet`
+      : `today's daily log hasn't been updated in ~${Math.round(ageMin)} min`;
+    return `🧠 Soul Recall: ${state} — if this session produced unsaved decisions/findings, flush them to memory/${stamp}.md (compaction only keeps what's written down).\n`;
+  } catch { return ''; }
+}
+
 function render(r) {
   let out = `🧠 Auto-retrieved memory [${r.mode}] (relevant to this prompt — verify before asserting; read the file for detail):\n`;
   for (const line of r.idx) out += line + '\n';
@@ -202,15 +263,21 @@ async function main() {
   try { input = JSON.parse(readStdin() || '{}'); } catch {}
   const prompt = input.prompt || '';
   const cwd = input.cwd || process.cwd();
-  if (tokenize(prompt).length < 2) process.exit(0);
-  let r = null;
-  try { r = await semanticRank(prompt); } catch {}
-  if (!r) r = keywordRank(prompt, cwd);
-  if (!r) process.exit(0);
-  process.stdout.write(render(r));
+  let out = '';
+  if (tokenize(prompt).length >= 2) {
+    let r = null;
+    try { r = await semanticRank(prompt); } catch {}
+    if (!r) r = keywordRank(prompt, cwd);
+    if (r) out += render(r);
+  }
+  // Conditional nudge rides the same injection (no extra hook); fires even when
+  // retrieval found nothing — staleness is independent of prompt relevance.
+  const nudge = flushNudge(cwd);
+  if (nudge) out += (out ? '\n' : '') + nudge;
+  if (out) process.stdout.write(out);
   process.exit(0);
 }
 
-module.exports = { tokenize, memoryRoots, collectFiles, shortPath, embed, cosine, semanticScored, semanticRank, keywordScored, keywordRank, CACHE, MODEL };
+module.exports = { tokenize, memoryRoots, collectFiles, shortPath, embed, cosine, semanticScored, semanticRank, keywordScored, keywordRank, flushNudge, CACHE, MODEL };
 
 if (require.main === module) main().catch(() => process.exit(0)); // hook entry; never break the turn
