@@ -58,8 +58,25 @@ function memoryRoots(cwd) {
 }
 function collectFiles(roots) {
   const files = new Set();
+  const addMd = d => { try { for (const f of fs.readdirSync(d)) if (f.endsWith('.md')) files.add(path.join(d, f)); } catch {} };
+  // Recurse subdirs ONLY inside a memory dir (archive/, daily-*/ ...) so archived
+  // early memories are recall-able. NEVER recurse the project root (cwd) — that would
+  // scan node_modules/src/etc. Existing decay/recency/staleness ranking keeps old
+  // archived logs from dominating; they surface only when strongly relevant.
+  const walkMem = d => {
+    let ents; try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
+    for (const e of ents) {
+      if (e.name.startsWith('.')) continue;
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walkMem(p);
+      else if (e.name.endsWith('.md')) files.add(p);
+    }
+  };
   for (const r of roots) {
-    try { if (fs.statSync(r).isDirectory()) for (const f of fs.readdirSync(r)) if (f.endsWith('.md')) files.add(path.join(r, f)); } catch {}
+    try {
+      if (!fs.statSync(r).isDirectory()) throw 0;
+      if (path.basename(r) === 'memory') walkMem(r); else addMd(r);
+    } catch {}
     try { const m = path.join(r, 'MEMORY.md'); if (fs.statSync(m).isFile()) files.add(m); } catch {}
   }
   return [...files];
