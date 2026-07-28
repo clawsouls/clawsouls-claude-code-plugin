@@ -63,12 +63,16 @@ cat SOUL.md IDENTITY.md AGENTS.md > CLAUDE.md
 claude
 ```
 
-### Option C: Marketplace (when available)
+### Option C: Marketplace install
+
+Add this repository as a plugin marketplace, then install the plugin:
 
 ```
 /plugin marketplace add clawsouls/clawsouls-claude-code-plugin
-/plugin install clawsouls@claude-code-plugin
+/plugin install clawsouls@clawsouls
 ```
+
+Pull updates later with `/plugin marketplace update clawsouls`.
 
 ### Prerequisites
 
@@ -514,7 +518,7 @@ claude-code-plugin/
 - [x] **Phase 2**: Memory management system
 - [x] **Phase 3**: SoulScan + export + MCP v0.3.0 (12 tools)
 - [x] **Phase 4**: Marketplace preparation + documentation
-- [ ] **Phase 5**: Marketplace submission
+- [x] **Phase 5**: Git marketplace install (`/plugin marketplace add clawsouls/clawsouls-claude-code-plugin`)
 - [ ] **Phase 6**: Claude Desktop plugin support (when available)
 - [ ] **Phase 7**: Multi-device memory sync
 
@@ -524,7 +528,7 @@ Contributions welcome! This plugin is part of the [Soul Spec](https://soulspec.o
 
 1. Fork the repo
 2. Create a feature branch
-3. Test with `claude --plugin-dir ./claude-code-plugin`
+3. Test with `claude --plugin-dir .` (from the repo root)
 4. Submit a PR
 
 ## Links
@@ -537,4 +541,4 @@ Contributions welcome! This plugin is part of the [Soul Spec](https://soulspec.o
 
 ## License
 
-Apache 2.0 © [ClawSouls](https://clawsouls.ai)
+Apache 2.0 © [ClawSouls](https://clawsouls.ai) — see [LICENSE](LICENSE).
