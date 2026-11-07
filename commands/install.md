@@ -17,5 +17,5 @@ Install a Soul Spec persona and apply it to the current project.
 
 ## Examples
 
-- `/clawsouls:install TomLeeLive/brad` — Install Brad persona
+- `/clawsouls:install clawsouls/brad` — Install Brad persona
 - `/clawsouls:install clawsouls/surgical-coder` — Install Surgical Coder

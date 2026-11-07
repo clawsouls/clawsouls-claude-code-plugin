@@ -15,57 +15,9 @@ Manage AI agent personas with [Soul Spec](https://soulspec.org) in Claude Code. 
 
 ## Quick Start
 
-### Option A: Local plugin (Recommended)
+### Option A: Marketplace install (Recommended)
 
-No marketplace registration needed. Clone and run:
-
-```bash
-# 1. Clone the plugin
-git clone https://github.com/clawsouls/clawsouls-claude-code-plugin.git ~/.claude/clawsouls-plugin
-
-# 2. Prepare your project directory with Soul Spec files
-mkdir -p ~/my-project && cd ~/my-project
-# Copy or create your SOUL.md, IDENTITY.md, AGENTS.md here
-
-# 3. Launch Claude Code with the plugin
-claude --plugin-dir ~/.claude/clawsouls-plugin
-```
-
-**With Telegram** (requires [Bun](https://bun.sh) and a Telegram bot token):
-
-```bash
-# Install Telegram channel plugin first (one-time)
-claude
-> /plugin install telegram@claude-plugins-official
-> /telegram:configure <YOUR_BOT_TOKEN>
-> exit
-
-# Launch with both plugin and Telegram channel
-claude --plugin-dir ~/.claude/clawsouls-plugin \
-       --channels plugin:telegram@claude-plugins-official
-```
-
-### Option B: CLAUDE.md only (simplest — no plugin)
-
-If you just want the persona without commands/hooks:
-
-```bash
-# Install the ClawSouls CLI
-npm install -g clawsouls
-
-# Export any soul from the registry as CLAUDE.md
-clawsouls export claude-md TomLeeLive/brad > CLAUDE.md
-
-# Or manually: copy your Soul Spec files into CLAUDE.md
-cat SOUL.md IDENTITY.md AGENTS.md > CLAUDE.md
-
-# Claude Code auto-reads CLAUDE.md from the project root
-claude
-```
-
-### Option C: Marketplace install
-
-Add this repository as a plugin marketplace, then install the plugin:
+Inside Claude Code, add this repository as a plugin marketplace, then install the plugin:
 
 ```
 /plugin marketplace add clawsouls/clawsouls-claude-code-plugin
@@ -74,61 +26,107 @@ Add this repository as a plugin marketplace, then install the plugin:
 
 Pull updates later with `/plugin marketplace update clawsouls`.
 
+Then install a persona into your project:
+
+```
+/clawsouls:install clawsouls/brad
+```
+
+### Option B: Local plugin (for development)
+
+Clone the repo and point Claude Code at it:
+
+```bash
+git clone https://github.com/clawsouls/clawsouls-claude-code-plugin.git ~/.claude/clawsouls-plugin
+cd ~/my-project
+claude --plugin-dir ~/.claude/clawsouls-plugin
+```
+
+### Option C: CLAUDE.md only (simplest — no plugin)
+
+If you just want the persona without commands, hooks or Soul Recall:
+
+```bash
+cd ~/my-project
+npx clawsouls install clawsouls/brad --use claude-code   # writes ./CLAUDE.md
+claude
+```
+
+> `--use claude-code` writes `CLAUDE.md` in the current directory and **replaces** an existing one — back it up first.
+
+### With Telegram
+
+Requires [Bun](https://bun.sh) and a Telegram bot token from [@BotFather](https://t.me/BotFather):
+
+```bash
+claude
+> /plugin install telegram@claude-plugins-official
+> /telegram:configure <YOUR_BOT_TOKEN>
+> exit
+
+# Launch with the Telegram channel (add --plugin-dir ... if you use Option B)
+claude --channels plugin:telegram@claude-plugins-official
+```
+
+See [Telegram Integration](#telegram-integration-claude-code-channels) for pairing.
+
 ### Prerequisites
 
 | Requirement | Version | Notes |
 |-------------|---------|-------|
 | [Claude Code](https://code.claude.com) | v2.1.80+ | Channels require v2.1.80+ |
-| Node.js | 18+ | For soul-spec-mcp server |
+| Node.js | 18+ | For the `clawsouls-mcp` server and the memory hooks |
 | [Bun](https://bun.sh) | 1.0+ | Only if using Telegram/Discord channels |
+| [Ollama](https://ollama.com) + `bge-m3` | optional | Semantic Soul Recall; without it, keyword ranking is used |
 
 ## Usage
 
-### Load a persona from the registry
+### Install a persona from the registry
 
 ```
-/clawsouls:load-soul TomLeeLive/brad
+/clawsouls:install clawsouls/brad
 ```
 
-Downloads the Soul Spec package and saves original files to `~/.clawsouls/active/TomLeeLive/brad/`. Creates a `current` symlink for quick access.
-
-### Activate your current soul
-
-```
-/clawsouls:activate
-```
-
-Reads `SOUL.md` from your project directory or `~/.clawsouls/active/current/` and applies the persona to the session. Safety constraints from `soul.json` are enforced.
+Downloads the Soul Spec package from the registry and applies it to the project as `CLAUDE.md`. The command asks the agent to keep any existing `CLAUDE.md` content under a `## Project Instructions` section, but the underlying `soul_install` tool writes `CLAUDE.md` directly — **commit or back up your `CLAUDE.md` first.**
 
 ### Browse available personas
 
 ```
 /clawsouls:browse coding assistant
-/clawsouls:browse work/engineering
-```
-
-### Memory management
-
-```
-/clawsouls:memory status
-/clawsouls:memory search "API integration"
+/clawsouls:browse                     # most popular
 ```
 
 ### Safety verification
 
 ```
-/clawsouls:scan                      # Scan active soul
-/clawsouls:scan TomLeeLive/brad      # Scan registry soul
-/clawsouls:scan ./my-agent/          # Scan local directory
+/clawsouls:scan                       # Scan the project's persona files
+/clawsouls:scan ./SOUL.md             # Scan a specific file
 ```
 
-### Export current persona
+### Persona drift & rollback
 
 ```
-/clawsouls:export ./my-exported-soul/
+/clawsouls:rollback status            # Drift analysis only
+/clawsouls:rollback                   # Analyze and offer a git-based restore
 ```
 
-Packages the active persona as a Soul Spec v0.5 directory for sharing or registry upload.
+### Memory (Swarm Memory)
+
+```
+/clawsouls:memory                     # status (default)
+/clawsouls:memory search "API integration"
+/clawsouls:memory sync                # git add / commit / push memory files
+/clawsouls:memory compact             # summarize daily logs older than 7 days
+```
+
+You rarely need `search` by hand — [Soul Recall](#soul-recall-active-memory) retrieves relevant memory on every prompt.
+
+### Migrate from OpenClaw
+
+```
+/clawsouls:migrate                    # auto-detect ./ or ~/.openclaw/workspace/
+/clawsouls:migrate --dry-run          # preview only
+```
 
 ## Telegram Integration (Claude Code Channels)
 
@@ -144,17 +142,17 @@ Claude Code Channels lets you message your AI agent from Telegram while Claude C
    ```
 3. **Restart with channels**:
    ```bash
-   claude --plugin-dir ~/.claude/clawsouls-plugin \
-          --channels plugin:telegram@claude-plugins-official
+   claude --channels plugin:telegram@claude-plugins-official
+   # Option B (local plugin): add --plugin-dir ~/.claude/clawsouls-plugin
    ```
 4. **Pair your account**: Send any message to your bot on Telegram, then in Claude Code:
    ```
    /telegram:access pair <CODE>
    /telegram:access policy allowlist
    ```
-5. **Activate persona**:
+5. **Install a persona** (if you haven't yet):
    ```
-   /clawsouls:activate
+   /clawsouls:install clawsouls/brad
    ```
 
 ### Always-On Setup (Background)
@@ -164,8 +162,7 @@ To keep the agent running 24/7:
 ```bash
 # Using tmux
 tmux new-session -d -s brad \
-  'claude --plugin-dir ~/.claude/clawsouls-plugin \
-          --channels plugin:telegram@claude-plugins-official'
+  'claude --channels plugin:telegram@claude-plugins-official'
 
 # Attach later
 tmux attach -t brad
@@ -177,26 +174,25 @@ tmux attach -t brad
 
 | Component | Purpose |
 |-----------|---------|
-| **Skills** | `soul-load`, `soul-browse`, `soul-scan`, `soul-export`, `memory-manage`, `migrate-openclaw` |
-| **Commands** | `/clawsouls:activate`, `/clawsouls:load-soul`, `/clawsouls:browse`, `/clawsouls:scan`, `/clawsouls:export`, `/clawsouls:memory`, `/clawsouls:migrate` |
-| **Agent** | `soul-agent` — Soul Spec-aware sub-agent for persona tasks |
-| **Hooks** | SessionStart → builds/refreshes the Soul Recall embedding cache (`memory-index.js`); UserPromptSubmit → auto-retrieves relevant memory into context (`memory-retrieve.js`) |
-| **MCP** | [soul-spec-mcp](https://github.com/clawsouls/soul-spec-mcp) v0.3.0 — 12 tools |
+| **Commands** | `/clawsouls:install`, `/clawsouls:browse`, `/clawsouls:scan`, `/clawsouls:rollback`, `/clawsouls:memory`, `/clawsouls:migrate` |
+| **Skills** | `persona-manager`, `soulscan`, `soul-rollback`, `swarm-memory`, `migrate-openclaw` — activated automatically by context |
+| **Agent** | `persona-advisor` — expert advisor for designing and reviewing personas |
+| **Hooks** | SessionStart → Soul Recall embedding cache · UserPromptSubmit → memory auto-retrieval · Stop → channel reply guard · PreCompact → memory flush reminder (see [Plugin Hooks](#plugin-hooks)) |
+| **MCP** | [clawsouls-mcp](https://github.com/clawsouls/clawsouls-mcp) (`npx -y clawsouls-mcp@latest`) — 9 tools |
 
-### MCP Tools (soul-spec-mcp v0.5.0)
+### MCP Tools (clawsouls-mcp)
 
 | Tool | Description |
 |------|-------------|
-| `search_souls` | Search the ClawSouls registry |
-| `get_soul` | Get detailed persona information |
-| `install_soul` | Download and save soul files locally |
-| `preview_soul` | Preview before installing |
-| `apply_persona` | Apply to current session (temporary) |
-| `list_categories` | List available categories |
-| `soul_scan` | Safety verification (53 patterns, A+ to F) |
-| `soul_rollback_check` | Detect persona drift vs baseline |
-| `memory_search` | Hybrid TF-IDF + semantic search (auto-detects Ollama bge-m3) |
-| `memory_get` | Fetch specific memory file content |
+| `soul_search` | Search personas on ClawSouls by keyword, category, or tag |
+| `soul_get` | Get detailed information about a persona |
+| `soul_install` | Download a persona and write it as `CLAUDE.md` |
+| `soul_scan` | SoulScan safety verification (53 patterns, A+ to F) |
+| `soul_rollback_check` | Detect persona drift vs. the committed version |
+| `memory_search` | TF-IDF search over `MEMORY.md` + `memory/*.md` |
+| `memory_detail` | Fetch the full content of a memory section |
+| `memory_status` | List memory files, sizes, dates and git status |
+| `memory_sync` | Git-based Swarm Memory sync (init / push / pull / status) |
 
 ### Soul Recall (Active Memory)
 
@@ -304,10 +300,9 @@ The plugin registers these hooks (see `hooks/hooks.json`), powering Soul Recall:
 
 Full specification: [soulspec.org](https://soulspec.org)
 
-### Soul File Locations (priority order)
+### Soul File Locations
 
-1. `./SOUL.md` — Project-local (highest priority)
-2. `~/.clawsouls/active/current/SOUL.md` — Global active soul (symlink)
+The persona lives in your project: `CLAUDE.md` (written by `/clawsouls:install`), plus any Soul Spec files (`SOUL.md`, `IDENTITY.md`, …) you keep in the project root. Claude Code reads `CLAUDE.md` automatically.
 
 ## Migrating from OpenClaw
 
@@ -335,8 +330,7 @@ cp ~/.openclaw/workspace/MEMORY.md ./
 cp -r ~/.openclaw/workspace/memory/ ./memory/
 
 # 3. Launch
-claude --plugin-dir ~/.claude/clawsouls-plugin \
-       --channels plugin:telegram@claude-plugins-official
+claude --channels plugin:telegram@claude-plugins-official
 ```
 
 ### Always-On with tmux
@@ -348,8 +342,7 @@ brew install tmux  # macOS
 # Start in background
 tmux new-session -d -s agent \
   'cd ~/my-project && \
-   claude --plugin-dir ~/.claude/clawsouls-plugin \
-          --channels plugin:telegram@claude-plugins-official'
+   claude --channels plugin:telegram@claude-plugins-official'
 
 # Attach / detach
 tmux attach -t agent      # Connect
@@ -358,7 +351,7 @@ tmux attach -t agent      # Connect
 
 ### Auto-restart on reboot (macOS)
 
-See [migration guide](https://docs.clawsouls.ai/guides/migration-to-claude-channels#auto-restart-on-reboot-macos-launchd) for `launchd` plist setup.
+Use a `launchd` LaunchAgent that starts the tmux session above at login — see [docs.clawsouls.ai](https://docs.clawsouls.ai).
 
 ### Hybrid Approach
 
@@ -367,7 +360,7 @@ Run both OpenClaw and Claude Code Channels — they share the same files:
 - **OpenClaw**: Always-on for cron, automated tasks, multi-channel
 - **Claude Code**: Cost-effective sessions within subscription
 
-Full migration guide: [docs.clawsouls.ai/guides/migration-to-claude-channels](https://docs.clawsouls.ai/guides/migration-to-claude-channels)
+More guides: [docs.clawsouls.ai](https://docs.clawsouls.ai)
 
 ## Troubleshooting
 
@@ -420,23 +413,19 @@ The Telegram channel server isn't receiving messages. Check causes 1-2 above. Re
 
 ### Plugin commands not showing up
 
-**Symptom**: `/clawsouls:activate` etc. not recognized.
+**Symptom**: `/clawsouls:install` etc. not recognized.
 
-```bash
-# Make sure you're using --plugin-dir
-claude --plugin-dir ~/.claude/clawsouls-plugin
-
-# Inside Claude Code, verify:
+```
+# Inside Claude Code, check the plugin is installed and enabled:
+/plugin
 /reload-plugins
 ```
 
-### CLAUDE.md conflicts with loaded soul
+For a local clone (Option B), make sure you launched with `claude --plugin-dir ~/.claude/clawsouls-plugin`.
 
-If you have both a `CLAUDE.md` in your project root AND load a soul via `/clawsouls:load-soul`, Claude may receive conflicting instructions. Solutions:
+### Installing a persona replaced my CLAUDE.md
 
-- **Remove CLAUDE.md** and use only `/clawsouls:activate`
-- **Or** keep CLAUDE.md as the sole persona source and skip the plugin commands
-- The plugin will warn you about this conflict
+`/clawsouls:install` (and `clawsouls install --use claude-code`) write `CLAUDE.md`. Keep `CLAUDE.md` in git so you can restore your own rules with `git diff` / `git checkout`, then merge them back under a `## Project Instructions` section.
 
 ### MCP server fails to start
 
@@ -444,70 +433,46 @@ If you have both a `CLAUDE.md` in your project root AND load a soul via `/clawso
 
 ```bash
 # Test the MCP server manually
-npx soul-spec-mcp@0.5.0
+npx -y clawsouls-mcp@latest
 
 # If Node.js version issues:
 node --version  # Needs 18+
 ```
 
-For remote MCP (no local Node.js), edit `.mcp.json`:
-```json
-{
-  "mcpServers": {
-    "soul-spec": {
-      "type": "url",
-      "url": "https://soul-change-production.up.railway.app/mcp"
-    }
-  }
-}
-```
-
 ## Directory Structure
 
 ```
-claude-code-plugin/
+clawsouls-claude-code-plugin/
 ├── .claude-plugin/
-│   ├── plugin.json         # Plugin manifest (v1.0.0)
-│   └── marketplace.json    # Marketplace registration
-├── .mcp.json               # MCP server config (soul-spec-mcp)
-├── skills/
-│   ├── soul-load/
-│   │   ├── SKILL.md        # Load personas from registry/local
-│   │   └── reference.md    # Soul Spec v0.5 quick reference
-│   ├── soul-browse/
-│   │   └── SKILL.md        # Search and browse registry
-│   ├── soul-scan/
-│   │   └── SKILL.md        # Safety verification
-│   ├── soul-export/
-│   │   └── SKILL.md        # Export persona as package
-│   ├── soul-rollback/
-│   │   └── SKILL.md        # Persona drift detection & recovery
-│   ├── swarm-memory/
-│   │   └── SKILL.md        # Git-based multi-agent memory sync
-│   ├── migrate-openclaw/
-│   │   └── SKILL.md        # OpenClaw → Claude Code migration
-│   └── memory-manage/
-│       └── SKILL.md        # Memory CRUD operations
+│   ├── plugin.json              # Plugin manifest
+│   └── marketplace.json         # Marketplace registration
+├── .mcp.json                    # MCP server config (clawsouls-mcp)
 ├── commands/
-│   ├── activate.md         # /clawsouls:activate
-│   ├── load-soul.md        # /clawsouls:load-soul
-│   ├── browse.md           # /clawsouls:browse
-│   ├── scan.md             # /clawsouls:scan
-│   ├── rollback.md         # /clawsouls:rollback
-│   ├── export.md           # /clawsouls:export
-│   ├── migrate.md          # /clawsouls:migrate
-│   └── memory.md           # /clawsouls:memory
+│   ├── install.md               # /clawsouls:install
+│   ├── browse.md                # /clawsouls:browse
+│   ├── scan.md                  # /clawsouls:scan
+│   ├── rollback.md              # /clawsouls:rollback
+│   ├── memory.md                # /clawsouls:memory
+│   └── migrate.md               # /clawsouls:migrate
+├── skills/
+│   ├── persona-manager/SKILL.md # Persona file management
+│   ├── soulscan/SKILL.md        # Safety verification
+│   ├── soul-rollback/SKILL.md   # Drift detection & recovery
+│   ├── swarm-memory/SKILL.md    # Git-based multi-agent memory sync
+│   └── migrate-openclaw/SKILL.md# OpenClaw → Claude Code migration
 ├── agents/
-│   ├── soul-agent.md       # Soul Spec-aware sub-agent
-│   └── persona-advisor.md  # Expert persona design advisor
+│   └── persona-advisor.md       # Persona design advisor
 ├── hooks/
-│   ├── hooks.json          # Hook registration (SessionStart, UserPromptSubmit)
-│   ├── memory-index.js     # Soul Recall: build/refresh bge-m3 embedding cache
-│   └── memory-retrieve.js  # Soul Recall: auto-retrieve memory on each prompt
-├── test/
-│   ├── memory-eval.js          # Soul Recall retrieval ablation harness
-│   ├── memory-eval-set.json    # Eval query set (N=32)
-│   └── MIGRATION_TEST.md       # Migration test checklist
+│   ├── hooks.json               # SessionStart, UserPromptSubmit, Stop, PreCompact
+│   ├── memory-index.js          # Soul Recall: build/refresh bge-m3 embedding cache
+│   ├── memory-retrieve.js       # Soul Recall: auto-retrieve memory on each prompt
+│   ├── channel-reply-guard.js   # Stop: make sure channel messages get a reply
+│   └── precompact-memory-flush.js # PreCompact: flush reminder
+├── docs/
+│   ├── AUTO_MEMORY_HOOK.md      # Soul Recall design + ablation
+│   └── MEMORY_SYNC_SETUP.md     # Swarm Memory setup
+├── test/                        # Retrieval evals + channel-reply-guard tests
+├── CHANGELOG.md
 └── README.md
 ```
 
@@ -535,7 +500,7 @@ Contributions welcome! This plugin is part of the [Soul Spec](https://soulspec.o
 
 - [Soul Spec](https://soulspec.org) — Open standard for AI agent personas
 - [ClawSouls Registry](https://clawsouls.ai/souls) — Browse and install personas
-- [soul-spec-mcp](https://github.com/clawsouls/soul-spec-mcp) — MCP server (12 tools)
+- [clawsouls-mcp](https://github.com/clawsouls/clawsouls-mcp) — MCP server (9 tools)
 - [Documentation](https://docs.clawsouls.ai) — Full guides and API reference
 - [OpenClaw](https://github.com/openclaw/openclaw) — AI agent framework
 

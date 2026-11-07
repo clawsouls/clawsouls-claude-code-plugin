@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Docs** — README now matches the shipped plugin: real commands (`install`, `browse`, `scan`, `rollback`, `memory`, `migrate` — `load-soul` / `activate` / `export` never shipped), real skills and agent, `clawsouls-mcp` with its 9 tools (was `soul-spec-mcp`, 12), marketplace install as the recommended path, `clawsouls/brad` as the example ID (`TomLeeLive/brad` is not in the registry), CLI-only option via `clawsouls install --use claude-code`, and removed dead links (Railway MCP endpoint, migration guide page).
+
 ## 1.1.0
 
 - **License** — unified to Apache-2.0 across `plugin.json`, `marketplace.json`, and the README, and added the full `LICENSE` file. (Previously `plugin.json` declared `MIT` while the README claimed Apache 2.0, and no `LICENSE` file existed.)
