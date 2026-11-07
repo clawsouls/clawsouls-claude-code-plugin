@@ -8,12 +8,13 @@ Install a Soul Spec persona and apply it to the current project.
 
 ## Steps
 
-1. Use the `soul_install` MCP tool with soul_id "$ARGUMENTS"
-2. After installation, export the persona to CLAUDE.md format:
-   - Read the installed SOUL.md, IDENTITY.md, STYLE.md, AGENTS.md files
-   - Merge them into the project's CLAUDE.md (or create one)
-   - Preserve any existing CLAUDE.md content under a "## Project Instructions" section
-3. Report what was installed and applied
+1. Split "$ARGUMENTS" (`owner/name`) and call the `soul_install` MCP tool with `owner` and `name`
+2. The tool merges the persona into the project's CLAUDE.md inside
+   `<!-- clawsouls:soul:start -->` / `<!-- clawsouls:soul:end -->` markers:
+   - No CLAUDE.md → it is created
+   - Existing CLAUDE.md → the user's content is kept; a previous ClawSouls block is replaced
+   Do not rewrite CLAUDE.md yourself.
+3. Report what was installed and what the tool said it did (created / replaced / added)
 
 ## Examples
 

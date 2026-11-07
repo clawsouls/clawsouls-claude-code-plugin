@@ -52,7 +52,7 @@ npx clawsouls install clawsouls/brad --use claude-code   # writes ./CLAUDE.md
 claude
 ```
 
-> `--use claude-code` writes `CLAUDE.md` in the current directory and **replaces** an existing one — back it up first.
+> `--use claude-code` merges the persona into `./CLAUDE.md` and keeps your existing content (clawsouls CLI 0.16.3+; older versions overwrote it).
 
 ### With Telegram
 
@@ -87,7 +87,7 @@ See [Telegram Integration](#telegram-integration-claude-code-channels) for pairi
 /clawsouls:install clawsouls/brad
 ```
 
-Downloads the Soul Spec package from the registry and applies it to the project as `CLAUDE.md`. The command asks the agent to keep any existing `CLAUDE.md` content under a `## Project Instructions` section, but the underlying `soul_install` tool writes `CLAUDE.md` directly — **commit or back up your `CLAUDE.md` first.**
+Downloads the Soul Spec package from the registry and merges it into the project's `CLAUDE.md` inside `<!-- clawsouls:soul:start -->` / `<!-- clawsouls:soul:end -->` markers. Your own `CLAUDE.md` content is kept; installing again or switching persona replaces only that block. (Requires `clawsouls-mcp` 0.4.2+; older versions overwrote `CLAUDE.md`.)
 
 ### Browse available personas
 
@@ -186,7 +186,7 @@ tmux attach -t brad
 |------|-------------|
 | `soul_search` | Search personas on ClawSouls by keyword, category, or tag |
 | `soul_get` | Get detailed information about a persona |
-| `soul_install` | Download a persona and write it as `CLAUDE.md` |
+| `soul_install` | Download a persona and merge it into `CLAUDE.md` (existing content kept) |
 | `soul_scan` | SoulScan safety verification (53 patterns, A+ to F) |
 | `soul_rollback_check` | Detect persona drift vs. the committed version |
 | `memory_search` | TF-IDF search over `MEMORY.md` + `memory/*.md` |
@@ -425,7 +425,7 @@ For a local clone (Option B), make sure you launched with `claude --plugin-dir ~
 
 ### Installing a persona replaced my CLAUDE.md
 
-`/clawsouls:install` (and `clawsouls install --use claude-code`) write `CLAUDE.md`. Keep `CLAUDE.md` in git so you can restore your own rules with `git diff` / `git checkout`, then merge them back under a `## Project Instructions` section.
+Versions before `clawsouls-mcp` 0.4.2 and clawsouls CLI 0.16.3 overwrote `CLAUDE.md`. Update (the plugin runs `clawsouls-mcp@latest`; restart Claude Code to pick it up), and restore your rules from git with `git checkout -- CLAUDE.md` before reinstalling.
 
 ### MCP server fails to start
 
