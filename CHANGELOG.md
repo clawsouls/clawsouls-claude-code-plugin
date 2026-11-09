@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.1.1
 
+- **Marketplace install no longer needs SSH** — the plugin entry's `source` is now `"./"` (the marketplace repo itself) instead of a `github` source. Installing used to clone the repo a second time over SSH, which failed with `Host key verification failed` on machines without GitHub SSH set up.
 - **`/clawsouls:install` no longer wipes CLAUDE.md** — with `clawsouls-mcp` 0.4.2 the persona is merged inside `clawsouls:soul` markers; the command no longer asks the agent to rewrite CLAUDE.md itself.
 - **Docs** — README now matches the shipped plugin: real commands (`install`, `browse`, `scan`, `rollback`, `memory`, `migrate` — `load-soul` / `activate` / `export` never shipped), real skills and agent, `clawsouls-mcp` with its 9 tools (was `soul-spec-mcp`, 12), marketplace install as the recommended path, `clawsouls/brad` as the example ID (`TomLeeLive/brad` is not in the registry), CLI-only option via `clawsouls install --use claude-code`, and removed dead links (Railway MCP endpoint, migration guide page).
 

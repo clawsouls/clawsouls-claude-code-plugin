@@ -1,7 +1,7 @@
 {
   "name": "clawsouls",
   "description": "AI agent persona management, safety verification, memory sync, and identity rollback for Claude Code. Powered by Soul Spec — the open standard for agent identity.",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "author": {
     "name": "ClawSouls",
     "url": "https://clawsouls.ai"
